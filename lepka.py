@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 
 # Вставьте ваш токен ниже
-API_TOKEN = 'API_TOKEN/'
+API_TOKEN = 'API_TOKEN'
 ADMIN_CHAT_ID = 'ADMIN_CHAT_ID'
 
 bot = telebot.TeleBot(API_TOKEN)
@@ -41,7 +41,7 @@ def get_phone(message):
         return
 
     user_data[chat_id]['phone'] = phone_number  # Сохраняем номер телефона пользователя
-    bot.send_message(chat_id, "📸Теперь прикрепите фото своего изделия. Когда закончите, нажмите Завершить.",
+    bot.send_message(chat_id, "📸 Теперь прикрепите фото своего изделия. Когда закончите, нажмите Завершить.",
                      reply_markup=generate_finish_button())
     bot.register_next_step_handler(message, get_photos)
 
@@ -55,7 +55,8 @@ def get_photos(message):
                          reply_markup=generate_finish_button())  # Добавляем кнопку "Завершить"
         bot.register_next_step_handler(message, get_photos)
     elif message.text.lower() == "завершить":
-        send_data_to_admin(chat_id)
+        bot.send_message(chat_id, "✏️ Пожалуйста, оставьте комментарий к вашему изделию.")
+        bot.register_next_step_handler(message, get_comment)
     else:
         bot.send_message(chat_id, "❗ Пожалуйста, отправьте фото.")
         bot.register_next_step_handler(message, get_photos)
@@ -66,11 +67,24 @@ def generate_finish_button():
     markup.add(finish_button)
     return markup
 
+def get_comment(message):
+    chat_id = message.chat.id
+    comment = message.text.strip()
+
+    if not comment:
+        bot.send_message(chat_id, "❗ Комментарий не может быть пустым. Пожалуйста, оставьте комментарий к вашему изделию.")
+        bot.register_next_step_handler(message, get_comment)
+        return
+
+    user_data[chat_id]['comment'] = comment  # Сохраняем комментарий пользователя
+    send_data_to_admin(chat_id)
+
 def send_data_to_admin(chat_id):
     if chat_id in user_data:
         # Отправляем информацию администратору
         info_message = (f"📝 Имя: {user_data[chat_id]['name']}\n"
                         f"📞 Телефон: {user_data[chat_id]['phone']}\n"
+                        f"💬 Комментарий: {user_data[chat_id]['comment']}\n"
                         f"🆔 Chat ID: {chat_id}")
 
         # Отправляем все фотографии в одном сообщении
@@ -84,7 +98,7 @@ def send_data_to_admin(chat_id):
         else:
             bot.send_message(ADMIN_CHAT_ID, info_message)
 
-        bot.send_message(chat_id, "Спасибо❤️ Ваше изделие зарегистрировано!Когда изделие будет готово вам придет оповещение в этот чат✨")
+        bot.send_message(chat_id, "Спасибо❤️ Ваше изделие зарегистрировано! Когда изделие будет готово, вам придет оповещение в этот чат✨")
         bot.send_message(chat_id, "Нажми кнопку домой и процесс начнётся заново 🏠", reply_markup=generate_home_button())  # Предлагаем нажать кнопку "Домой"
         del user_data[chat_id]  # Очищаем данные пользователя после отправки
     else:
