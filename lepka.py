@@ -3,7 +3,7 @@ from telebot import types
 
 # Вставьте ваш токен ниже
 API_TOKEN = 'API_TOKEN'
-ADMIN_CHAT_ID = 'ADMIN_CHAT_ID'
+ADMIN_CHAT_ID = 'ADMIN_CHAT_ID.'
 
 bot = telebot.TeleBot(API_TOKEN)
 
