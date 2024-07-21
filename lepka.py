@@ -3,8 +3,8 @@ from telebot import types
 
 # Вставьте ваш токен ниже
 API_TOKEN = 'API_TOKEN'
-ADMIN_CHAT_ID = 'ADMIN_CHAT_ID.'
-
+ADMIN_CHAT_ID = 'ADMIN_CHAT_ID'
+#ADMIN_CHAT_ID = ['ADMIN_CHAT_ID', 'ADMIN_CHAT_ID1']  # Список chat_id администраторов
 bot = telebot.TeleBot(API_TOKEN)
 
 user_data = {}  # Хранилище для данных пользователя
@@ -110,25 +110,34 @@ def generate_home_button():
     markup.add(home_button)
     return markup
 
+
 # Обработчик для получения уведомлений от администратора
 @bot.message_handler(func=lambda message: message.text.lower() == "уведомление")
 def notify_user(message):
     chat_id = message.chat.id
     if str(chat_id) == ADMIN_CHAT_ID:
-        bot.send_message(chat_id, "Пожалуйста, введите ID пользователя для уведомления:")
-        bot.register_next_step_handler(message, process_notify_id)
+        bot.send_message(chat_id, "Пожалуйста, введите ID пользователей для уведомления, разделённые запятыми:")
+        bot.register_next_step_handler(message, process_notify_ids)
     else:
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         notify_button = types.KeyboardButton("Уведомление")
         markup.add(notify_button)
         bot.send_message(chat_id, "Выберите действие:", reply_markup=markup)
 
-def process_notify_id(message):
+
+def process_notify_ids(message):
     try:
-        chat_id = int(message.text)
+        ids_text = message.text
+        user_ids = [user_id.strip() for user_id in ids_text.split(',')]
         notification = "Чтобы выбрать дату, когда Вам удобно его забрать, напишите @my_namin"
-        bot.send_message(chat_id, f"Ваше изделие готово. {notification}")
-        bot.send_message(message.chat.id, "Уведомление успешно отправлено.")
+
+        for user_id in user_ids:
+            try:
+                bot.send_message(user_id, f"Ваше изделие готово. {notification}")
+            except Exception as e:
+                bot.send_message(message.chat.id, f"❌ Ошибка при отправке сообщения пользователю {user_id}: {e}")
+
+        bot.send_message(message.chat.id, "Уведомления успешно отправлены.")
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
 
