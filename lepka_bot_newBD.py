@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 import sqlite3
 from database import (init_db, add_order, get_user_by_chat_id, get_new_orders,
-                      update_order_status)
+                      update_order_status, get_photos_for_order)
 
 API_TOKEN = 'API_TOKEN'
 ADMIN_CHAT_ID = 'ADMIN_CHAT_ID'
@@ -17,7 +17,6 @@ def send_welcome(message):
     user = get_user_by_chat_id(chat_id)
     if str(chat_id) == ADMIN_CHAT_ID:
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        # notify_button = types.KeyboardButton("Уведомление")
         new_orders_button = types.KeyboardButton("Новые заказы")
         markup.add(new_orders_button)
         bot.send_message(chat_id, "Выберите действие:", reply_markup=markup)
@@ -91,8 +90,20 @@ def get_comment(message):
         bot.register_next_step_handler(message, get_comment)
     else:
         user_data[chat_id]['comment'] = comment
-        add_order(user_data[chat_id]['name'], user_data[chat_id]['phone'], user_data[chat_id]['comment'], chat_id)
+        order_id = add_order(user_data[chat_id]['name'], user_data[chat_id]['phone'], user_data[chat_id]['comment'],
+                             chat_id)
+
+        conn = sqlite3.connect('orders.db')
+        c = conn.cursor()
+        for photo_id in user_data[chat_id]['photos']:
+            c.execute('''
+                INSERT INTO order_photos (order_number, photo_id) VALUES (?, ?)
+            ''', (order_id, photo_id))
+        conn.commit()
+        conn.close()
+
         send_data_to_admin(chat_id)
+        del user_data[chat_id]
 
 
 def send_data_to_admin(chat_id):
@@ -101,19 +112,24 @@ def send_data_to_admin(chat_id):
                         f"📞 Телефон: {user_data[chat_id]['phone']}\n"
                         f"💬 Комментарий: {user_data[chat_id]['comment']}\n"
                         f"🆔 Chat ID: {chat_id}")
-        if 'photos' in user_data[chat_id]:
-            media = [types.InputMediaPhoto(photo_id) for photo_id in user_data[chat_id]['photos']]
-            if media:
-                media[0].caption = info_message
-                bot.send_media_group(ADMIN_CHAT_ID, media)
-            else:
-                bot.send_message(ADMIN_CHAT_ID, info_message)
+        conn = sqlite3.connect('orders.db')
+        c = conn.cursor()
+        c.execute(
+            'SELECT photo_id FROM order_photos WHERE order_number = (SELECT order_number FROM orders WHERE chat_id = ?)',
+            (chat_id,))
+        photos = c.fetchall()
+        conn.close()
+
+        if photos:
+            media = [types.InputMediaPhoto(photo[0]) for photo in photos]
+            media[0].caption = info_message
+            bot.send_media_group(ADMIN_CHAT_ID, media)
         else:
             bot.send_message(ADMIN_CHAT_ID, info_message)
+
         bot.send_message(chat_id,
                          "Спасибо❤️ Ваше изделие зарегистрировано! Когда изделие будет готово, вам придет оповещение в этот чат✨")
         bot.send_message(chat_id, "Нажми кнопку домой и процесс начнётся заново 🏠", reply_markup=generate_home_button())
-        del user_data[chat_id]
     else:
         bot.send_message(chat_id, "Нет данных для отправки. Пожалуйста, начните с команды /start.")
 
@@ -124,34 +140,6 @@ def generate_home_button():
     markup.add(home_button)
     return markup
 
-
-# @bot.message_handler(func=lambda message: message.text.lower() == "уведомление")
-# def notify_user(message):
-#     chat_id = message.chat.id
-#     if str(chat_id) == ADMIN_CHAT_ID:
-#         bot.send_message(chat_id, "Пожалуйста, введите ID пользователей для уведомления, разделённые запятыми:")
-#         bot.register_next_step_handler(message, process_notify_ids)
-#     else:
-#         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-#         notify_button = types.KeyboardButton("Уведомление")
-#         markup.add(notify_button)
-#         bot.send_message(chat_id, "Выберите действие:", reply_markup=markup)
-
-
-# def process_notify_ids(message):
-#     try:
-#         ids_text = message.text
-#         user_ids = [user_id.strip() for user_id in ids_text.split(',')]
-#         for user_id in user_ids:
-#             user_id = int(user_id)
-#             bot.send_message(user_id,
-#                              "📣Ваш заказ готов к выдаче! Чтобы выбрать дату, когда Вам удобно его забрать, напишите @my_namin.")
-#             mark_as_notified(user_id)
-#         bot.send_message(message.chat.id, "Уведомления отправлены.")
-#     except ValueError:
-#         bot.send_message(message.chat.id, "Неверный формат. Пожалуйста, введите правильные ID пользователей.")
-
-
 @bot.message_handler(func=lambda message: message.text.lower() == "новые заказы")
 def show_new_orders(message):
     chat_id = message.chat.id
@@ -159,15 +147,32 @@ def show_new_orders(message):
         orders = get_new_orders()
         if orders:
             for order in orders:
-                order_message = (f"🆔 Order ID: {order[0]}\n"
-                                 f"📝 Имя: {order[1]}\n"
-                                 f"📞 Телефон: {order[2]}\n"
-                                 f"💬 Комментарий: {order[3]}\n"
-                                 f"🆔 Chat ID: {order[4]}")
+                order_number = order[0]
+                name = order[1]
+                phone = order[2]
+                comment = order[3]
+                order_chat_id = order[4]
+
+                photos = get_photos_for_order(order_number)
+
+                order_message = (f"🆔 Order ID: {order_number}\n"
+                                 f"📝 Имя: {name}\n"
+                                 f"📞 Телефон: {phone}\n"
+                                 f"💬 Комментарий: {comment}\n"
+                                 f"🆔 Chat ID: {order_chat_id}")
+
                 markup = types.InlineKeyboardMarkup()
-                button = types.InlineKeyboardButton(text="Отправить уведомление", callback_data=f"notify_{order[0]}")
+                button = types.InlineKeyboardButton(text="Отправить уведомление", callback_data=f"notify_{order_number}")
                 markup.add(button)
-                bot.send_message(chat_id, order_message, reply_markup=markup)
+
+                if photos:
+                    # Отправляем первую фотографию с текстом и кнопкой
+                    bot.send_photo(chat_id, photos[0], caption=order_message, reply_markup=markup)
+                    # Отправляем остальные фотографии без текста и кнопок
+                    for photo in photos[1:]:
+                        bot.send_photo(chat_id, photo)
+                else:
+                    bot.send_message(chat_id, order_message, reply_markup=markup)
         else:
             bot.send_message(chat_id, "Нет новых заказов.")
     else:

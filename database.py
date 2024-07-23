@@ -14,6 +14,14 @@ def init_db():
             status TEXT DEFAULT 'new'  -- Новый столбец для статуса заказа
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS order_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_number INTEGER,
+            photo_id TEXT,
+            FOREIGN KEY(order_number) REFERENCES orders(order_number)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -23,8 +31,10 @@ def add_order(name, phone, comment, chat_id):
     c.execute('''
         INSERT INTO orders (name, phone, comment, chat_id) VALUES (?, ?, ?, ?)
     ''', (name, phone, comment, chat_id))
+    order_id = c.lastrowid  # Получаем ID только что добавленного заказа
     conn.commit()
     conn.close()
+    return order_id
 
 def get_last_orders(limit=15):
     conn = sqlite3.connect('orders.db')
@@ -69,3 +79,11 @@ def update_order_status(order_number, status):
     ''', (status, order_number))
     conn.commit()
     conn.close()
+
+def get_photos_for_order(order_number):
+    conn = sqlite3.connect('orders.db')
+    c = conn.cursor()
+    c.execute('SELECT photo_id FROM order_photos WHERE order_number = ?', (order_number,))
+    photos = c.fetchall()
+    conn.close()
+    return [photo[0] for photo in photos]
