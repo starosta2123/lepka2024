@@ -11,7 +11,7 @@ def init_db():
             comment TEXT,
             chat_id INTEGER,
             notified INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'new'  -- Новый столбец для статуса заказа
+            status TEXT DEFAULT 'new'
         )
     ''')
     c.execute('''
@@ -31,7 +31,7 @@ def add_order(name, phone, comment, chat_id):
     c.execute('''
         INSERT INTO orders (name, phone, comment, chat_id) VALUES (?, ?, ?, ?)
     ''', (name, phone, comment, chat_id))
-    order_id = c.lastrowid  # Получаем ID только что добавленного заказа
+    order_id = c.lastrowid
     conn.commit()
     conn.close()
     return order_id

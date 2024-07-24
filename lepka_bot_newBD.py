@@ -10,6 +10,7 @@ bot = telebot.TeleBot(API_TOKEN)
 
 user_data = {}
 
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = message.chat.id
@@ -34,8 +35,9 @@ def send_welcome(message):
             user_data[chat_id] = {}
             bot.send_message(chat_id, "👋 Здравствуйте! Представьтесь, пожалуйста.")
             bot.register_next_step_handler(message, get_name)
-    except:
-        bot.send_message(chat_id, "Произошла ошибка. Попробуйте еще раз.")
+    except Exception as e:
+        bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
+
 
 def get_name(message):
     chat_id = message.chat.id
@@ -43,23 +45,26 @@ def get_name(message):
         user_data[chat_id]['name'] = message.text
         bot.send_message(chat_id, "📞 Пожалуйста, введите свой номер телефона.")
         bot.register_next_step_handler(message, get_phone)
-    except:
-        bot.send_message(chat_id, "Произошла ошибка. Попробуйте еще раз.")
+    except Exception as e:
+        bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
+
 
 def get_phone(message):
     chat_id = message.chat.id
     phone_number = message.text
     try:
         if not phone_number.isdigit() or len(phone_number) != 11:
-            bot.send_message(chat_id, "❌ Неверный формат номера. Пожалуйста, введите номер телефона, состоящий из 11 цифр.")
+            bot.send_message(chat_id,
+                             "❌ Неверный формат номера. Пожалуйста, введите номер телефона, состоящий из 11 цифр.")
             bot.register_next_step_handler(message, get_phone)
         else:
             user_data[chat_id]['phone'] = phone_number
             bot.send_message(chat_id, "📸 Теперь прикрепите фото своего изделия. Когда закончите, нажмите Завершить.",
                              reply_markup=generate_finish_button())
             bot.register_next_step_handler(message, get_photos)
-    except:
-        bot.send_message(chat_id, "Произошла ошибка. Попробуйте еще раз.")
+    except Exception as e:
+        bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
+
 
 def get_photos(message):
     chat_id = message.chat.id
@@ -78,14 +83,16 @@ def get_photos(message):
         else:
             bot.send_message(chat_id, "❗ Пожалуйста, отправьте фото.")
             bot.register_next_step_handler(message, get_photos)
-    except:
-        bot.send_message(chat_id, "Произошла ошибка. Попробуйте еще раз.")
+    except Exception as e:
+        bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
+
 
 def generate_finish_button():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     finish_button = types.KeyboardButton("Завершить")
     markup.add(finish_button)
     return markup
+
 
 def get_comment(message):
     chat_id = message.chat.id
@@ -109,12 +116,12 @@ def get_comment(message):
             conn.commit()
             conn.close()
 
-            send_data_to_admin(chat_id)
-            del user_data[chat_id]
-    except:
-        bot.send_message(chat_id, "Произошла ошибка. Попробуйте еще раз.")
+            send_data_to_admin(chat_id, order_id)
+    except Exception as e:
+        bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
 
-def send_data_to_admin(chat_id):
+
+def send_data_to_admin(chat_id, order_id):
     try:
         if chat_id in user_data:
             info_message = (f"📝 Имя: {user_data[chat_id]['name']}\n"
@@ -123,9 +130,7 @@ def send_data_to_admin(chat_id):
                             f"🆔 Chat ID: {chat_id}")
             conn = sqlite3.connect('orders.db')
             c = conn.cursor()
-            c.execute(
-                'SELECT photo_id FROM order_photos WHERE order_number = (SELECT order_number FROM orders WHERE chat_id = ?)',
-                (chat_id,))
+            c.execute('SELECT photo_id FROM order_photos WHERE order_number = ?', (order_id,))
             photos = c.fetchall()
             conn.close()
 
@@ -138,17 +143,23 @@ def send_data_to_admin(chat_id):
 
             bot.send_message(chat_id,
                              "Спасибо❤️ Ваше изделие зарегистрировано! Когда изделие будет готово, вам придет оповещение в этот чат✨")
-            bot.send_message(chat_id, "Нажми кнопку домой и процесс начнётся заново 🏠", reply_markup=generate_home_button())
+            bot.send_message(chat_id, "Нажми кнопку домой и процесс начнётся заново 🏠",
+                             reply_markup=generate_home_button())
+
+            # Очистка данных после завершения
+            del user_data[chat_id]
         else:
             bot.send_message(chat_id, "Нет данных для отправки. Пожалуйста, начните с команды /start.")
-    except:
-        bot.send_message(chat_id, "Произошла ошибка. Попробуйте еще раз.")
+    except Exception as e:
+        bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
+
 
 def generate_home_button():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     home_button = types.KeyboardButton("🏠 Домой")
     markup.add(home_button)
     return markup
+
 
 @bot.message_handler(func=lambda message: message.text.lower() == "новые заказы")
 def show_new_orders(message):
@@ -173,7 +184,8 @@ def show_new_orders(message):
                                      f"🆔 Chat ID: {order_chat_id}")
 
                     markup = types.InlineKeyboardMarkup()
-                    button = types.InlineKeyboardButton(text="Отправить уведомление", callback_data=f"notify_{order_number}")
+                    button = types.InlineKeyboardButton(text="Отправить уведомление",
+                                                        callback_data=f"notify_{order_number}")
                     markup.add(button)
 
                     if photos:
@@ -186,8 +198,9 @@ def show_new_orders(message):
                 bot.send_message(chat_id, "Нет новых заказов.")
         else:
             bot.send_message(chat_id, "У вас нет доступа к этой команде.")
-    except:
-        bot.send_message(chat_id, "Произошла ошибка. Попробуйте еще раз.")
+    except Exception as e:
+        bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
+
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("notify_"))
 def handle_notification(call):
@@ -204,12 +217,14 @@ def handle_notification(call):
         update_order_status(order_number, 'closed')
         bot.answer_callback_query(call.id)
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-    except:
-        bot.send_message(call.message.chat.id, "Произошла ошибка при отправке уведомления.")
+    except Exception as e:
+        bot.send_message(call.message.chat.id, f"Произошла ошибка при отправке уведомления: {str(e)}.")
+
 
 @bot.message_handler(func=lambda message: message.text.lower() == "🏠 домой")
 def go_home(message):
     send_welcome(message)
+
 
 if __name__ == '__main__':
     init_db()
