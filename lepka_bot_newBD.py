@@ -5,7 +5,7 @@ from database import (init_db, add_order, get_user_by_chat_id, get_new_orders,
                       update_order_status, get_photos_for_order)
 
 API_TOKEN = 'API_TOKEN'
-ADMIN_CHAT_ID = 'ADMIN_CHAT_ID'
+ADMIN_CHAT_IDS = ['ADMIN_CHAT_IDS1', 'ADMIN_CHAT_IDS2', 'ADMIN_CHAT_IDS3']
 bot = telebot.TeleBot(API_TOKEN)
 
 user_data = {}
@@ -16,7 +16,7 @@ def send_welcome(message):
     chat_id = message.chat.id
     try:
         user = get_user_by_chat_id(chat_id)
-        if str(chat_id) == ADMIN_CHAT_ID:
+        if str(chat_id) in ADMIN_CHAT_IDS:
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
             new_orders_button = types.KeyboardButton("Новые заказы")
             markup.add(new_orders_button)
@@ -28,8 +28,7 @@ def send_welcome(message):
                 'comment': user[3],
                 'photos': []
             }
-            bot.send_message(chat_id, "📸 Теперь прикрепите фото своего изделия. Когда закончите, нажмите Завершить.",
-                             reply_markup=generate_finish_button())
+            bot.send_message(chat_id, "📸 Теперь прикрепите фото своего изделия.")
             bot.register_next_step_handler(message, get_photos)
         else:
             user_data[chat_id] = {}
@@ -59,8 +58,7 @@ def get_phone(message):
             bot.register_next_step_handler(message, get_phone)
         else:
             user_data[chat_id]['phone'] = phone_number
-            bot.send_message(chat_id, "📸 Теперь прикрепите фото своего изделия. Когда закончите, нажмите Завершить.",
-                             reply_markup=generate_finish_button())
+            bot.send_message(chat_id, "📸 Теперь прикрепите фото своего изделия.")
             bot.register_next_step_handler(message, get_photos)
     except Exception as e:
         bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
@@ -73,11 +71,6 @@ def get_photos(message):
             if 'photos' not in user_data[chat_id]:
                 user_data[chat_id]['photos'] = []
             user_data[chat_id]['photos'].append(message.photo[-1].file_id)
-            bot.send_message(chat_id,
-                             "✅ Фото получено. Вы можете отправить ещё одно фото или нажмите Завершить, чтобы завершить.",
-                             reply_markup=generate_finish_button())
-            bot.register_next_step_handler(message, get_photos)
-        elif message.text.lower() == "завершить":
             bot.send_message(chat_id, "✏️ Пожалуйста, оставьте комментарий к вашему изделию.")
             bot.register_next_step_handler(message, get_comment)
         else:
@@ -85,13 +78,6 @@ def get_photos(message):
             bot.register_next_step_handler(message, get_photos)
     except Exception as e:
         bot.send_message(chat_id, f"Произошла ошибка: {str(e)}. Попробуйте еще раз.")
-
-
-def generate_finish_button():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    finish_button = types.KeyboardButton("Завершить")
-    markup.add(finish_button)
-    return markup
 
 
 def get_comment(message):
@@ -134,12 +120,13 @@ def send_data_to_admin(chat_id, order_id):
             photos = c.fetchall()
             conn.close()
 
-            if photos:
-                media = [types.InputMediaPhoto(photo[0]) for photo in photos]
-                media[0].caption = info_message
-                bot.send_media_group(ADMIN_CHAT_ID, media)
-            else:
-                bot.send_message(ADMIN_CHAT_ID, info_message)
+            for admin_chat_id in ADMIN_CHAT_IDS:
+                if photos:
+                    media = [types.InputMediaPhoto(photo[0]) for photo in photos]
+                    media[0].caption = info_message
+                    bot.send_media_group(admin_chat_id, media)
+                else:
+                    bot.send_message(admin_chat_id, info_message)
 
             bot.send_message(chat_id,
                              "Спасибо❤️ Ваше изделие зарегистрировано! Когда изделие будет готово, вам придет оповещение в этот чат✨")
@@ -156,7 +143,7 @@ def send_data_to_admin(chat_id, order_id):
 
 def generate_home_button():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    home_button = types.KeyboardButton("🏠 Домой")
+    home_button = types.KeyboardButton("🏠 домой")  # Изменено на "домой" в нижнем регистре
     markup.add(home_button)
     return markup
 
@@ -165,7 +152,7 @@ def generate_home_button():
 def show_new_orders(message):
     chat_id = message.chat.id
     try:
-        if str(chat_id) == ADMIN_CHAT_ID:
+        if str(chat_id) in ADMIN_CHAT_IDS:
             orders = get_new_orders()
             if orders:
                 for order in orders:
@@ -213,7 +200,7 @@ def handle_notification(call):
         conn.close()
 
         bot.send_message(chat_id,
-                         "📣Ваш заказ готов к выдаче! Чтобы выбрать дату, когда Вам удобно его забрать, напишите @my_namin.")
+                         "📣Ваш заказ готов к выдаче! Чтобы выбрать дату, когда Вам удобно его забрать, напишите @none.")
         update_order_status(order_number, 'closed')
         bot.answer_callback_query(call.id)
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
